@@ -23,7 +23,7 @@ class Program
         sourceDirectory = srcDir;
         replicaDirectory = rplDir;
 
-        FileVerification(sourceDirectory, replicaDirectory);
+        RunReplication(sourceDirectory, replicaDirectory);
     }
 
     private static bool CheckDirectoryPathValidity(string sourceDirectory, string repliceDirectory)
@@ -41,18 +41,49 @@ class Program
         return true;
     }
 
+    private static void RunReplication(string srcDir, string rplDir)
+    {
+        FileVerification(srcDir, rplDir);
+        foreach(var dirName in DirectoryVerification(srcDir, rplDir))
+        {
+            RunReplication($"{srcDir}\\{dirName}", $"{rplDir}\\{dirName}");
+        }
+    }
+
+    private static IEnumerable<string> DirectoryVerification(string srcDir, string rplDir)
+    {
+        var sourceDirs = Directory.EnumerateDirectories(srcDir).Select(dir => Path.GetFileName(dir)).ToHashSet();
+        var replicaDirs = Directory.EnumerateDirectories(rplDir).Select(dir => Path.GetFileName(dir)).ToHashSet();
+
+        foreach(var sourceDir in sourceDirs)
+        {
+            if (!replicaDirs.Contains(sourceDir))
+                Directory.CreateDirectory($"{rplDir}\\{sourceDir}");
+            else
+                replicaDirs.Remove(sourceDir);
+        }
+
+        RemoveDirectories(rplDir, replicaDirs);
+
+        return sourceDirs;
+    }
+
     private static void FileVerification(string srcDir, string rplDir)
     {
         var sourceFiles = Directory.EnumerateFiles(srcDir).Select(file => Path.GetFileName(file)).ToHashSet();
         var replicaFiles = Directory.EnumerateFiles(rplDir).Select(file => Path.GetFileName(file)).ToHashSet();
 
-        foreach(string sourceFile in sourceFiles)
+        foreach(var sourceFile in sourceFiles)
         {
             if(!replicaFiles.Contains(sourceFile))
                 CopyFile(srcDir, rplDir, sourceFile);
-            else
+            else{
                 ValidateFileContent(srcDir, rplDir, sourceFile);
+                replicaFiles.Remove(sourceFile);
+            }
         }
+
+        RemoveFiles(rplDir, replicaFiles);
     }
 
     private static void CopyFile(string srcDir, string rplDir, string fileName)
@@ -76,6 +107,22 @@ class Program
         if (!originalFileHash.SequenceEqual(replicaFileHash))
         {
             CopyFile(srcDir, rplDir, fileName);
+        }
+    }
+
+    private static void RemoveFiles(string dirPath, IEnumerable<string> fileNames)
+    {
+        foreach(var fileName in fileNames)
+        {
+            File.Delete($"{dirPath}\\{fileName}");
+        }
+    }
+
+    private static void RemoveDirectories(string dirPath, IEnumerable<string> dirNames)
+    {
+        foreach(var dirName in dirNames)
+        {
+            Directory.Delete($"{dirPath}\\{dirName}");
         }
     }
 
