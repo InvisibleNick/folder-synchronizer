@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
+using System.Security.Cryptography;
 
 class Program
 {
@@ -13,20 +14,16 @@ class Program
 
     static void Main(string[] args)
     {
-        if (!CheckDirectoryPathValidity(args[0], args[1]))
+        var srcDir = args[0];
+        var rplDir = args[1];
+
+        if (!CheckDirectoryPathValidity(srcDir, rplDir))
             return;
         
-        sourceDirectory = args[0];
-        replicaDirectory = args[1];
+        sourceDirectory = srcDir;
+        replicaDirectory = rplDir;
 
-        List<string> sourceFiles = (List<string>) Directory.EnumerateFiles(sourceDirectory).OrderBy(file => file, StringComparer.OrdinalIgnoreCase);
-        List<string> replicaFiles = (List<string>) Directory.EnumerateFiles(replicaDirectory).OrderBy(file => file, StringComparer.OrdinalIgnoreCase);
-
-        for(var i = 0; i < sourceFiles.Count; i++)
-        {
-            //
-        }
-        
+        FileVerification(sourceDirectory, replicaDirectory);
     }
 
     private static bool CheckDirectoryPathValidity(string sourceDirectory, string repliceDirectory)
@@ -42,5 +39,51 @@ class Program
             return false;
         }
         return true;
+    }
+
+    private static void FileVerification(string srcDir, string rplDir)
+    {
+        var sourceFiles = Directory.EnumerateFiles(srcDir).Select(file => Path.GetFileName(file)).ToHashSet();
+        var replicaFiles = Directory.EnumerateFiles(rplDir).Select(file => Path.GetFileName(file)).ToHashSet();
+
+        foreach(string sourceFile in sourceFiles)
+        {
+            if(!replicaFiles.Contains(sourceFile))
+                CopyFile(srcDir, rplDir, sourceFile);
+            else
+                ValidateFileContent(srcDir, rplDir, sourceFile);
+        }
+    }
+
+    private static void CopyFile(string srcDir, string rplDir, string fileName)
+    {
+        var tmpFilePath = $"{rplDir}\\{fileName}.tmp";
+        var origninalFilePath = $"{srcDir}\\{fileName}";
+        var replicaFilePath = $"{rplDir}\\{fileName}";
+
+        File.Copy(origninalFilePath, tmpFilePath, true);
+        File.Move(tmpFilePath, replicaFilePath, true);
+    }
+
+    private static void ValidateFileContent(string srcDir, string rplDir, string fileName)
+    {
+        var origninalFilePath = $"{srcDir}\\{fileName}";
+        var replicaFilePath = $"{rplDir}\\{fileName}";
+
+        var originalFileHash = GetFileHash(origninalFilePath);
+        var replicaFileHash = GetFileHash(replicaFilePath);
+
+        if (!originalFileHash.SequenceEqual(replicaFileHash))
+        {
+            CopyFile(srcDir, rplDir, fileName);
+        }
+    }
+
+    private static byte[] GetFileHash(string filePath)
+    {
+        using var fileStream = File.OpenRead(filePath);
+        using var sha = SHA256.Create();
+
+        return sha.ComputeHash(fileStream);
     }
 }
