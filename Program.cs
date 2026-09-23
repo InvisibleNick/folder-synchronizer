@@ -5,9 +5,17 @@ using System.Security.Cryptography;
 
 class Program
 {
-    private const string ERROR_MASSAGE_DIRECTORY_NOT_EXIST = "Sorry, the path to the {0} directory you provided is invalid. Check it and restart the application.";
-    private const string ERROR_MASSAGE_WRONG_NUMBER_FORMAT = "Sorry, the amount of time you provided is invalid. Use \"##.##\" format";
-    private const string ERROR_MASSAGE_WRONG_UNIT = "Sorry, the unit you provided is invalid. Use only \"d\" for days, \"h\" for hours, \"m\" for minutes, \"s\" for seconds, \"mil\" for miliseconds, \"mic\" for microseconds";
+    private const string ERROR_MASSAGE_DIRECTORY_NOT_EXIST = "[ERROR] Sorry, the path to the {0} directory you provided is invalid. Check it and restart the application.";
+    private const string ERROR_MASSAGE_WRONG_NUMBER_FORMAT = "{ERROR] Sorry, the amount of time you provided is invalid. Use \"##.##\" format";
+    private const string ERROR_MASSAGE_WRONG_UNIT = "[ERROR] Sorry, the unit you provided is invalid. Use only \"d\" for days, \"h\" for hours, \"m\" for minutes, \"s\" for seconds, \"mil\" for miliseconds, \"mic\" for microseconds";
+    private const string INFO_REPLICATION_STARTS = "[INFO] Replication run was started at ";
+    private const string INFO_REPLICATION_FINISHED = "[INFO] Replication run was finished at {0}\n\n";
+    private const string INFO_DIRECTORY_CREATED = "[INFO] Directory was created at \"{0}\"";
+    private const string INFO_TMP_FILE_CREATED = "[INFO] Temporary file was created at \"{0}\" with a content of \"{1}\"";
+    private const string INFO_TMP_FILE_MOVED = "[INFO] Temporary file \"{0}\" was renamed/moved to \"{1}\"";
+    private const string INFO_CONTENT_MISMATCH = "[INFO] Content of files \"{0}\" and \"{1}\" mismatch";
+    private const string INFO_FILE_REMOVED = "[INFO] File was removed at \"{0}\"";
+    private const string INFO_DIRECTORY_REMOVED = "[INFO] Directory was removed at \"{0}\"";
     private const string SOURCE_FOLDER_TEXT = "source";
     private const string REPLICA_FOLDER_TEXT = "replica";
     private static readonly string[] ACCEPTABLE_UNITS = ["d", "h", "m", "s", "mil", "mic"];
@@ -42,7 +50,9 @@ class Program
 
         do
         {
+            Console.WriteLine($"{INFO_REPLICATION_STARTS}{DateTime.Now}");
             RunReplication(sourceDirectory, replicaDirectory);
+            Console.WriteLine(string.Format(INFO_REPLICATION_FINISHED, DateTime.Now));
         }
         while(await timer.WaitForNextTickAsync());
     }
@@ -119,8 +129,11 @@ class Program
 
         foreach(var sourceDir in sourceDirs)
         {
-            if (!replicaDirs.Contains(sourceDir))
-                Directory.CreateDirectory($"{rplDir}\\{sourceDir}");
+            if (!replicaDirs.Contains(sourceDir)){
+                var newDir = $"{rplDir}\\{sourceDir}";
+                Directory.CreateDirectory(newDir);
+                Console.WriteLine(string.Format(INFO_DIRECTORY_CREATED, newDir));
+            }
             else
                 replicaDirs.Remove(sourceDir);
         }
@@ -155,7 +168,9 @@ class Program
         var replicaFilePath = $"{rplDir}\\{fileName}";
 
         File.Copy(origninalFilePath, tmpFilePath, true);
+        Console.WriteLine(string.Format(INFO_TMP_FILE_CREATED, tmpFilePath, origninalFilePath));
         File.Move(tmpFilePath, replicaFilePath, true);
+        Console.WriteLine(string.Format(INFO_TMP_FILE_MOVED, tmpFilePath, replicaFilePath));
     }
 
     private static void ValidateFileContent(string srcDir, string rplDir, string fileName)
@@ -165,9 +180,10 @@ class Program
 
         var originalFileHash = GetFileHash(origninalFilePath);
         var replicaFileHash = GetFileHash(replicaFilePath);
-
+        
         if (!originalFileHash.SequenceEqual(replicaFileHash))
         {
+            Console.WriteLine(string.Format(INFO_CONTENT_MISMATCH, origninalFilePath, replicaFilePath));
             CopyFile(srcDir, rplDir, fileName);
         }
     }
@@ -176,7 +192,9 @@ class Program
     {
         foreach(var fileName in fileNames)
         {
-            File.Delete($"{dirPath}\\{fileName}");
+            var fileRemovePath = $"{dirPath}\\{fileName}";
+            File.Delete(fileRemovePath);
+            Console.WriteLine(string.Format(INFO_FILE_REMOVED, fileRemovePath));
         }
     }
 
@@ -184,7 +202,9 @@ class Program
     {
         foreach(var dirName in dirNames)
         {
-            Directory.Delete($"{dirPath}\\{dirName}");
+            var removeDirPath = $"{dirPath}\\{dirName}";
+            Directory.Delete(removeDirPath, true);
+            Console.WriteLine(string.Format(INFO_DIRECTORY_REMOVED, removeDirPath));
         }
     }
 
