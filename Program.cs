@@ -1,30 +1,46 @@
-﻿using System;
-using System.Diagnostics;
-using System.Runtime.CompilerServices;
-using System.Security.Cryptography;
+﻿using System.Security.Cryptography;
+using System.Text;
 
 class Program
 {
-    private const string ERROR_MASSAGE_DIRECTORY_NOT_EXIST = "[ERROR] Sorry, the path to the {0} directory you provided is invalid. Check it and restart the application.";
-    private const string ERROR_MASSAGE_WRONG_NUMBER_FORMAT = "{ERROR] Sorry, the amount of time you provided is invalid. Use \"##.##\" format";
-    private const string ERROR_MASSAGE_WRONG_UNIT = "[ERROR] Sorry, the unit you provided is invalid. Use only \"d\" for days, \"h\" for hours, \"m\" for minutes, \"s\" for seconds, \"mil\" for miliseconds, \"mic\" for microseconds";
-    private const string INFO_REPLICATION_STARTS = "[INFO] Replication run was started at ";
-    private const string INFO_REPLICATION_FINISHED = "[INFO] Replication run was finished at {0}\n\n";
-    private const string INFO_DIRECTORY_CREATED = "[INFO] Directory was created at \"{0}\"";
-    private const string INFO_TMP_FILE_CREATED = "[INFO] Temporary file was created at \"{0}\" with a content of \"{1}\"";
-    private const string INFO_TMP_FILE_MOVED = "[INFO] Temporary file \"{0}\" was renamed/moved to \"{1}\"";
-    private const string INFO_CONTENT_MISMATCH = "[INFO] Content of files \"{0}\" and \"{1}\" mismatch";
-    private const string INFO_FILE_REMOVED = "[INFO] File was removed at \"{0}\"";
-    private const string INFO_DIRECTORY_REMOVED = "[INFO] Directory was removed at \"{0}\"";
+    private enum LogPrefix
+    {
+        ERROR, INFO
+    }
+
+    private const string ERROR_MASSAGE_DIRECTORY_NOT_EXIST = "Sorry, the path to the {0} directory you provided is invalid. Check it and restart the application.";
+    private const string ERROR_MASSAGE_WRONG_NUMBER_FORMAT = "Sorry, the amount of time you provided is invalid. Use \"##.##\" format.";
+    private const string ERROR_MASSAGE_WRONG_UNIT = "Sorry, the unit you provided is invalid. Use only \"d\" for days, \"h\" for hours, \"m\" for minutes, \"s\" for seconds, \"mil\" for miliseconds, \"mic\" for microseconds.";
+    private const string ERROR_LOG_NOT_EXIST = "Sorry, the path to the log file is invalid. Check it and restart the application.";
+    private const string ERROR_WRONG_LOG_EXTENSION = "Sorry, the log file has wrong extension. The extension should be \".txt\". Check it and restart the application.";
+    private const string ERROR_WRONG_AMOUNT_OF_ARGUMENTS = "Sorry, there should be strictly 5 arguments. 1 - source folder path, 2 - replica folder path, 3 - amount of time of periodical check, 4 - unit of time of periodical check, 5 - log file path";
+    private const string INFO_REPLICATION_STARTS = "Replication run was started at ";
+    private const string INFO_REPLICATION_FINISHED = "Replication run was finished at {0}.\n\n";
+    private const string INFO_DIRECTORY_CREATED = "Directory was created at \"{0}\".";
+    private const string INFO_TMP_FILE_CREATED = "Temporary file was created at \"{0}\" with a content of \"{1}\".";
+    private const string INFO_TMP_FILE_MOVED = "Temporary file \"{0}\" was renamed/moved to \"{1}\".";
+    private const string INFO_CONTENT_MISMATCH = "Content of files \"{0}\" and \"{1}\" mismatch.";
+    private const string INFO_FILE_REMOVED = "File was removed at \"{0}\".";
+    private const string INFO_DIRECTORY_REMOVED = "Directory was removed at \"{0}\".";
     private const string SOURCE_FOLDER_TEXT = "source";
     private const string REPLICA_FOLDER_TEXT = "replica";
+    private const string LOG_FILE_EXTENSION = ".txt";
+    private const string LOG_PREFIX_ERROR = "[ERROR]";
+    private const string LOG_PREFIX_INFO = "[INFO]";
+    private const int PROPER_AMOUNT_OF_ARGS = 5;
     private static readonly string[] ACCEPTABLE_UNITS = ["d", "h", "m", "s", "mil", "mic"];
 
     private static string? sourceDirectory;
     private static string? replicaDirectory;
+    private static string logFile = "";
+
+    private static StringBuilder logBuffer = new StringBuilder();
 
     static async Task Main(string[] args)
     {
+        if(!CheckProperAmountOfArguments(args))
+            return;
+
         var srcDir = args[0];
         var rplDir = args[1];
 
@@ -33,6 +49,11 @@ class Program
         
         sourceDirectory = srcDir;
         replicaDirectory = rplDir;
+
+        var logTmpVar = args[4];
+        if (!CheckLogPathValidity(logTmpVar))
+            return;
+        logFile = logTmpVar;
 
         var formatCheck = CheckForProperNumberFormat(args[2]);
         if(formatCheck == null)
@@ -50,27 +71,55 @@ class Program
 
         do
         {
-            Console.WriteLine($"{INFO_REPLICATION_STARTS}{DateTime.Now}");
+            Log($"{INFO_REPLICATION_STARTS}{DateTime.Now}.", LogPrefix.INFO);
             RunReplication(sourceDirectory, replicaDirectory);
-            Console.WriteLine(string.Format(INFO_REPLICATION_FINISHED, DateTime.Now));
+            Log(string.Format(INFO_REPLICATION_FINISHED, DateTime.Now), LogPrefix.INFO);
+            WriteLogsToFile();
         }
         while(await timer.WaitForNextTickAsync());
+    }
+
+    private static bool CheckProperAmountOfArguments(string[] args)
+    {
+        if(args.Count() != PROPER_AMOUNT_OF_ARGS)
+        {
+            Log(ERROR_WRONG_AMOUNT_OF_ARGUMENTS, LogPrefix.ERROR, false);
+            return false;
+        }
+
+        return true;
     }
 
     private static bool CheckDirectoryPathValidity(string sourceDirectory, string repliceDirectory)
     {
         if (!Directory.Exists(sourceDirectory))
         {
-            Console.WriteLine(string.Format(ERROR_MASSAGE_DIRECTORY_NOT_EXIST, SOURCE_FOLDER_TEXT));
+            Log(string.Format(ERROR_MASSAGE_DIRECTORY_NOT_EXIST, SOURCE_FOLDER_TEXT), LogPrefix.ERROR, false);
             return false;
         }
         else if (!Directory.Exists(repliceDirectory))
         {
-            Console.WriteLine(string.Format(ERROR_MASSAGE_DIRECTORY_NOT_EXIST, REPLICA_FOLDER_TEXT));
+            Log(string.Format(ERROR_MASSAGE_DIRECTORY_NOT_EXIST, REPLICA_FOLDER_TEXT), LogPrefix.ERROR, false);
             return false;
         }
         return true;
     }
+
+    private static bool CheckLogPathValidity(string logPath)
+    {
+        if (!File.Exists(logPath))
+        {
+            Log(string.Format(ERROR_LOG_NOT_EXIST, SOURCE_FOLDER_TEXT), LogPrefix.ERROR, false);
+            return false;
+        }
+        else if (!logPath.EndsWith(".txt"))
+        {
+            Log(string.Format(ERROR_WRONG_LOG_EXTENSION, REPLICA_FOLDER_TEXT), LogPrefix.ERROR,false);
+            return false;
+        }
+        return true;
+    }
+
 
     private static double? CheckForProperNumberFormat(string numberToParse)
     {
@@ -81,7 +130,7 @@ class Program
         }
         catch (Exception)
         {
-            Console.WriteLine(string.Format(ERROR_MASSAGE_WRONG_NUMBER_FORMAT));
+            Log(ERROR_MASSAGE_WRONG_NUMBER_FORMAT, LogPrefix.ERROR, false);
             return null;
         }
 
@@ -92,7 +141,7 @@ class Program
     {
         if(!ACCEPTABLE_UNITS.Contains(unit))
         {
-            Console.WriteLine(string.Format(ERROR_MASSAGE_WRONG_UNIT));
+            Log(ERROR_MASSAGE_WRONG_UNIT, LogPrefix.ERROR, false);
             return false;
         }
 
@@ -132,7 +181,7 @@ class Program
             if (!replicaDirs.Contains(sourceDir)){
                 var newDir = $"{rplDir}\\{sourceDir}";
                 Directory.CreateDirectory(newDir);
-                Console.WriteLine(string.Format(INFO_DIRECTORY_CREATED, newDir));
+                Log(string.Format(INFO_DIRECTORY_CREATED, newDir), LogPrefix.INFO);
             }
             else
                 replicaDirs.Remove(sourceDir);
@@ -168,9 +217,9 @@ class Program
         var replicaFilePath = $"{rplDir}\\{fileName}";
 
         File.Copy(origninalFilePath, tmpFilePath, true);
-        Console.WriteLine(string.Format(INFO_TMP_FILE_CREATED, tmpFilePath, origninalFilePath));
+        Log(string.Format(INFO_TMP_FILE_CREATED, tmpFilePath, origninalFilePath), LogPrefix.INFO);
         File.Move(tmpFilePath, replicaFilePath, true);
-        Console.WriteLine(string.Format(INFO_TMP_FILE_MOVED, tmpFilePath, replicaFilePath));
+        Log(string.Format(INFO_TMP_FILE_MOVED, tmpFilePath, replicaFilePath), LogPrefix.INFO);
     }
 
     private static void ValidateFileContent(string srcDir, string rplDir, string fileName)
@@ -183,7 +232,7 @@ class Program
         
         if (!originalFileHash.SequenceEqual(replicaFileHash))
         {
-            Console.WriteLine(string.Format(INFO_CONTENT_MISMATCH, origninalFilePath, replicaFilePath));
+            Log(string.Format(INFO_CONTENT_MISMATCH, origninalFilePath, replicaFilePath), LogPrefix.INFO);
             CopyFile(srcDir, rplDir, fileName);
         }
     }
@@ -194,7 +243,7 @@ class Program
         {
             var fileRemovePath = $"{dirPath}\\{fileName}";
             File.Delete(fileRemovePath);
-            Console.WriteLine(string.Format(INFO_FILE_REMOVED, fileRemovePath));
+            Log(string.Format(INFO_FILE_REMOVED, fileRemovePath), LogPrefix.INFO);
         }
     }
 
@@ -204,7 +253,7 @@ class Program
         {
             var removeDirPath = $"{dirPath}\\{dirName}";
             Directory.Delete(removeDirPath, true);
-            Console.WriteLine(string.Format(INFO_DIRECTORY_REMOVED, removeDirPath));
+            Log(string.Format(INFO_DIRECTORY_REMOVED, removeDirPath), LogPrefix.INFO);
         }
     }
 
@@ -214,5 +263,32 @@ class Program
         using var sha = SHA256.Create();
 
         return sha.ComputeHash(fileStream);
+    }
+
+    private static void Log(string content, LogPrefix logPrefix, bool logToFile = true)
+    {
+        var info = $"{LogPrefixToString(logPrefix)} {content}";
+        if (logToFile) logBuffer.Append($"{info}\n");
+        Console.WriteLine(info);
+    }
+
+    private static string LogPrefixToString(LogPrefix logPrefix)
+    {
+        return logPrefix switch
+    {
+        LogPrefix.INFO => LOG_PREFIX_INFO,
+        LogPrefix.ERROR => LOG_PREFIX_ERROR,
+        _ => throw new NotImplementedException()
+    };
+    }
+
+    private static void WriteLogsToFile()
+    {
+        using (var streamWriter = new StreamWriter(logFile, append: true))
+        {
+            var log = logBuffer.ToString();
+            streamWriter.WriteLine(log);
+            logBuffer.Clear();
+        }
     }
 }
